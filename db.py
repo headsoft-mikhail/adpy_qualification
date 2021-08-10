@@ -1,5 +1,4 @@
 import sqlalchemy
-import psycopg2
 import person
 
 
@@ -161,7 +160,6 @@ class DataBase:
                   'Music', 'Movies', 'Interests', 'Books', 'Photos', 'Persons']
         for table_name in tables:
             self.db.execute(f"""TRUNCATE TABLE {table_name} CASCADE""")
-        print('Таблицы очищены')
 
     def close(self):
         self.db.close()

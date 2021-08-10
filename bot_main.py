@@ -1,5 +1,3 @@
-# https://github.com/netology-code/py-advanced-diplom/tree/new_diplom
-
 from vk_bot import VkBot
 from vk_api.longpoll import VkEventType
 

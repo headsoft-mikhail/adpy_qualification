@@ -1,5 +1,6 @@
 from datetime import datetime
 
+
 class Person:
     def __init__(self):
         self.id = None
@@ -40,7 +41,6 @@ class Person:
             today = datetime.now()
             self.data['age'] = today.year - bdate.year - ((today.month, today.day) < (bdate.month, bdate.day))
 
-
     def full_name(self):
         return f"{self.first_name} {self.last_name}"
 
@@ -52,5 +52,3 @@ class Person:
 
     def is_defined(self, user_id):
         return self.id == user_id
-
-

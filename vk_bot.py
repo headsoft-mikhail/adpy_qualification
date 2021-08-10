@@ -36,6 +36,7 @@ class VkBot:
             self.send_best_candidates()  # показываем кандидатов из бд
         elif self.talk.ml_bot.topic == self.talk.ml_bot.scenarios[0].exit_topic:  # закончили вводить параметры поиска
             self.db.clear()  # очистка БД, т.к. это новый поиск
+            self.search.search_offset = 0  # результаты снова будут выводиться с самого первого
             self.update_question_ignore_list()  # определение недостающих данных
             self.talk.write_reply(self.user.id, answer)  # ответ пользователю
         elif self.talk.ml_bot.topic == self.talk.ml_bot.scenarios[1].exit_topic:  # закончили ввод недостающих данных
