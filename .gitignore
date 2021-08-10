@@ -1,0 +1,5 @@
+Thumbs.db
+venv/
+.idea/
+__pycache__/
+tokens.py
