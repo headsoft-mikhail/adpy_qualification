@@ -4,8 +4,10 @@ import person
 
 class DataBase:
     def __init__(self, name, password):
+        self.favorite_prefix = 'F'
         try:
             self.db = self.open_db(name, password)
+            self.clear_favorites()
         except sqlalchemy.exc.OperationalError:
             self.db = self.create_db(name, password)
 
@@ -37,24 +39,31 @@ class DataBase:
         self.create_interests_tables('Interests')
         self.create_photos_tables()
 
+        # tables to save favorites
+        self.db.execute(f"""CREATE TABLE IF NOT EXISTS {self.favorite_prefix}Persons(
+                            Id SERIAL PRIMARY KEY,
+                            Name VARCHAR(80) NOT NULL,
+                            Score NUMERIC);""")
+        self.create_photos_tables(self.favorite_prefix)
+
     def create_interests_tables(self, interest_name):
         self.db.execute(f"""CREATE TABLE IF NOT EXISTS {interest_name}(
                             Id SERIAL PRIMARY KEY,
-                            Name VARCHAR(80) NOT NULL UNIQUE);""")
+                            Name TEXT NOT NULL UNIQUE);""")
         self.db.execute(f"""CREATE TABLE IF NOT EXISTS Persons{interest_name}(
                             PersonId INTEGER REFERENCES Persons,
                             {interest_name}Id INTEGER REFERENCES {interest_name},
                             CONSTRAINT pk_Person{interest_name} PRIMARY KEY (PersonId, {interest_name}Id));""")
 
-    def create_photos_tables(self):
-        self.db.execute(f"""CREATE TABLE IF NOT EXISTS Photos(
+    def create_photos_tables(self, prefix=''):
+        self.db.execute(f"""CREATE TABLE IF NOT EXISTS {prefix}Photos(
                             Id SERIAL PRIMARY KEY,
                             Attachment VARCHAR(80) NOT NULL UNIQUE,
                             Url TEXT NOT NULL UNIQUE);""")
-        self.db.execute(f"""CREATE TABLE IF NOT EXISTS PersonsPhotos(
-                            PersonId INTEGER REFERENCES Persons,
-                            PhotosId INTEGER REFERENCES Photos,
-                            CONSTRAINT pk_PersonPhotos PRIMARY KEY (PersonId, PhotosId));""")
+        self.db.execute(f"""CREATE TABLE IF NOT EXISTS {prefix}PersonsPhotos(
+                            PersonId INTEGER REFERENCES {prefix}Persons,
+                            PhotosId INTEGER REFERENCES {prefix}Photos,
+                            CONSTRAINT pk_{prefix}Person{prefix}Photos PRIMARY KEY (PersonId, PhotosId));""")
 
     def add_person(self, person, interest_list, user_id, viewed=False):
         city = person.data['city']
@@ -67,7 +76,7 @@ class DataBase:
         if age is None:
             age = 0
         self.db.execute(f"""INSERT INTO Persons (name, id, city, sex, age, viewed)
-                           VALUES {person.full_name(),
+                            VALUES {person.full_name(),
                                     person.id,
                                     city,
                                     sex,
@@ -81,12 +90,14 @@ class DataBase:
             self.add_to_photos(photo, person)
         self.calculate_compatibility(user_id, person, interest_list)
 
-    def add_to_photos(self, photo, person):
-        self.db.execute(f"""INSERT INTO Photos (attachment, url) 
-                                    VALUES ('{photo['attachment']}','{photo['url']}');""")
-        photo_id = self.db.execute(f"SELECT id FROM Photos WHERE attachment = '{photo['attachment']}'").fetchone()[0]
-        self.db.execute(f"""INSERT INTO PersonsPhotos (personid, photosid) 
-                                    VALUES ({person.id}, {photo_id});""")
+    def add_to_photos(self, photo, person, prefix=''):
+        self.db.execute(f"""INSERT INTO {prefix}Photos (attachment, url) 
+                            VALUES ('{photo['attachment']}','{photo['url']}');""")
+        photo_id = self.db.execute(f"""SELECT id 
+                                       FROM {prefix}Photos 
+                                       WHERE attachment = '{photo['attachment']}'""").fetchone()[0]
+        self.db.execute(f"""INSERT INTO {prefix}Persons{prefix}Photos (PersonId, PhotosId) 
+                            VALUES ({person.id}, {photo_id});""")
 
     def add_to_interests_table(self, interest_name, item, person):
         try:
@@ -95,7 +106,7 @@ class DataBase:
         except sqlalchemy.exc.IntegrityError:
             pass
         item_id = self.db.execute(f"SELECT id FROM {interest_name} WHERE name = '{item}'").fetchone()[0]
-        self.db.execute(f"""INSERT INTO Persons{interest_name} (personid, {interest_name}id) 
+        self.db.execute(f"""INSERT INTO Persons{interest_name} (PersonId, {interest_name}id) 
                             VALUES ({person.id}, {item_id});""")
 
     def get_person_params(self, person_id, params_list):
@@ -147,8 +158,8 @@ class DataBase:
             best_person.id = item[0]
             [best_person.first_name, best_person.last_name] = item[1].split(' ')
             best_person.photos = self.db.execute(f"""SELECT Photos.attachment, Photos.url FROM Photos
-                                                     JOIN PersonsPhotos ON PersonsPhotos.photosid = Photos.id
-                                                     WHERE PersonsPhotos.personid = {item[0]}""").fetchall()
+                                                     JOIN PersonsPhotos ON PersonsPhotos.PhotosId = Photos.id
+                                                     WHERE PersonsPhotos.PersonId = {item[0]}""").fetchall()
             persons.append(best_person)
             self.db.execute(f"""UPDATE Persons 
                                 SET viewed = TRUE
@@ -160,6 +171,38 @@ class DataBase:
                   'Music', 'Movies', 'Interests', 'Books', 'Photos', 'Persons']
         for table_name in tables:
             self.db.execute(f"""TRUNCATE TABLE {table_name} CASCADE""")
+
+    def get_favorites(self):
+        favorites = ''
+        for item in self.db.execute(f"""SELECT name, id 
+                                        FROM {self.favorite_prefix}Persons
+                                        ORDER BY score DESC""").fetchall():
+            print(item)
+            favorites += f'[id{item[1]}|{item[0]}]\n'
+        return favorites
+
+    def clear_favorites(self):
+        self.db.execute(f"""TRUNCATE TABLE {self.favorite_prefix}Persons CASCADE""")
+        self.db.execute(f"""TRUNCATE TABLE {self.favorite_prefix}Photos CASCADE""")
+        self.db.execute(f"""TRUNCATE TABLE {self.favorite_prefix}PersonsPhotos CASCADE""")
+
+    def add_to_favorite(self, person_id):
+        try:
+            self.db.execute(f"""INSERT INTO {self.favorite_prefix}Persons (name, id, score)
+                                SELECT name, id, score FROM Persons
+                                WHERE id={person_id}""")
+            photo_ids = self.db.execute(f"""SELECT PhotosId
+                                            FROM PersonsPhotos
+                                            WHERE PersonId={person_id}""").fetchall()
+            for photo_id in photo_ids:
+                self.db.execute(f"""INSERT INTO {self.favorite_prefix}Photos  (Id, Attachment, URL)
+                                    SELECT id, attachment, url FROM Photos
+                                    WHERE id={photo_id[0]}""")
+            self.db.execute(f"""INSERT INTO {self.favorite_prefix}PersonsPhotos (PersonId, PhotosId) 
+                                SELECT PersonId, PhotosId FROM PersonsPhotos
+                                WHERE PersonId={person_id}""")
+        except sqlalchemy.exc.IntegrityError:
+            pass
 
     def close(self):
         self.db.close()
