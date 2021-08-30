@@ -5,9 +5,11 @@ import random
 from ml_bot.bot_config import BOT_CONFIG, SEARCH_PARAMETERS, USER_MISSING_DATA
 from ml_bot.questions_sequence import QuestionsSequence
 
+
 class MLBot:
     def __init__(self):
         self.topic = None
+        self.adding_favourite = False
         self.bot_config = BOT_CONFIG
         self.bot_config['intents'].update(
             {
@@ -29,23 +31,37 @@ class MLBot:
                 'missing_data_set':
                     {
                         'examples': [],
-                        'responses': ['Чтобы найти еще людей с теми же параметрами поиска, напишите "Ещё"']
+                        'responses': ['Чтобы найти еще людей с теми же параметрами поиска, напишите "Ещё". '
+                                      'Чтобы перейти к просмотру найденных кандидатов, напишите "Результат"']
                     },
                 'search_complete':
                     {
-                        'examples': ['Чтобы найти еще людей с теми же параметрами поиска, напишите "Ещё"'],
-                        'responses': ['Вот, что мне удалось найти:']
+                        'examples': ['Чтобы найти еще людей с теми же параметрами поиска, напишите "Ещё". '
+                                     'Чтобы перейти к просмотру найденных кандидатов, напишите "Результат"'],
+                        'responses': ['Подождите, идет поиск кандидатов...']
                     },
                 'show_db':
                     {
-                        'examples': ['Покажи найденные пары', 'Покажи кандидатов', 'Результат', 'найденные пары',
-                                     'кандидаты', 'найденные результаты', 'покажи результаты'],
-                        'responses': ['Лучшие непросмотренные кандидаты из прошлых поисков:']
+                        'examples': ['Покажи найденные пары', 'Покажи', 'Покажи кандидатов', 'Результат',
+                                     'найденные пары', 'кандидаты', 'найденные результаты', 'покажи результаты'],
+                        'responses': ['Показываю найденных кандидатов. Их можно добавить в список избранных. '
+                                      'Для завершения просмотра напишите "Стоп"']
+                    },
+                'show_favorites':
+                    {
+                        'examples': ['Избранное', 'Избранные пары', 'Лучшие пары', 'Лучшее'],
+                        'responses': ['Избранные:']
+                    },
+                'clear_favorites':
+                    {
+                        'examples': ['Очистить избранное', 'Удалить избранное', 'Очистить', 'Очистить лучшее',
+                                     'Удалить сохраненное', 'Очистить сохраненное', 'Удалить'],
+                        'responses': ['Избранные пары удалены']
                     }
             })
         self.clf, self.vectorizer = self.ml_train()
         self.scenarios = [QuestionsSequence(SEARCH_PARAMETERS[:], 'enter_search', 'search_parameters_set'),
-                          QuestionsSequence(USER_MISSING_DATA[:],  'ask_missing_data', 'missing_data_set')]
+                          QuestionsSequence(USER_MISSING_DATA[:], 'ask_missing_data', 'missing_data_set')]
 
     def classify_intent(self, replica):
         # ML
